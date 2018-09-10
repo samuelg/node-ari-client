@@ -15,17 +15,95 @@
 
 'use strict';
 
-var client = require('ari-client');
-var Promise = require('bluebird');
-var util = require('util');
+const client = require('ari-client');
+const Promise = require('bluebird');
+
+/**
+ *  Initiate a playback on the given channel.
+ *
+ *  @function play
+ *  @memberof example
+ *  @param {module:ari-client~Client} ari - an ARI client instance
+ *  @param {module:resources~Channel} channel - the channel to send the
+ *    playback to
+ *  @param {string} sound - the string identifier of the sound to play
+ *  @returns {Q} promise - a promise that will resolve to the finished
+ *                         playback
+ */
+function play(ari, channel, sound) {
+  const playback = ari.Playback();
+
+  return new Promise((resolve, reject) => {
+    playback.once('PlaybackFinished',
+      /**
+       *  Once playback telling user how to leave a message has
+       *  finished, play message telling user how to play the
+       *  next available message.
+       *
+       *  @callback leaveMessageCallback
+       *  @memberof mwi-example
+       *  @param {Error} err - error object if any, null otherwise
+       *  @param {module:resources~Playback} newPlayback -
+       *    the playback object once it has finished
+       */
+      (event, playback) => {
+
+        resolve(playback);
+      });
+
+    channel.play({media: sound}, playback)
+      .catch((err) => {
+        reject(err);
+      });
+  });
+}
+
+/**
+ *  Initiate a recording on the given channel.
+ *
+ *  @function record
+ *  @memberof example
+ *  @param {module:ari-client~Client} ari - an ARI client instance
+ *  @param {module:resources~Channel} channel - the channel to record
+ *  @param {object} opts - options to be passed to the record function
+ *  @returns {Q} promise - a promise that will resolve to the finished
+ *                         recording
+ */
+function record(ari, channel, opts) {
+  const recording = ari.LiveRecording();
+
+  return new Promise((resolve, reject) => {
+    recording.once('RecordingFinished',
+      /**
+       *  Once the message has been recorded, play an announcement
+       *  that the message has been saved and update the mailbox
+       *  to show the new message count.
+       *
+       *  @callback recordingFinishedCallback
+       *  @memberof mwi-example
+       *  @param {Object} event - the full event object
+       *  @param {module:resources~LiveRecording} newRecording -
+       *    the recording object after creation
+       */
+      (event, recording) => {
+
+        resolve(recording);
+      });
+
+    channel.record(opts, recording)
+      .catch((err) => {
+        reject(err);
+      });
+  });
+}
 
 // replace ari.js with your Asterisk instance
 client.connect('http://ari.js:8088', 'user', 'secret')
-  .then(function (ari) {
+  .then((ari) => {
 
     // Create new mailbox
-    var mailbox = ari.Mailbox('mwi-example');
-    var messages = 0;
+    const mailbox = ari.Mailbox('mwi-example');
+    let messages = 0;
 
     ari.on('StasisStart',
         /**
@@ -39,7 +117,7 @@ client.connect('http://ari.js:8088', 'user', 'secret')
          *  @param {module:resources~Channel} channel -
          *    the channel that entered Stasis
          */
-        function (event, channel) {
+        (event, channel) => {
 
       channel.on('ChannelDtmfReceived',
           /**
@@ -52,163 +130,86 @@ client.connect('http://ari.js:8088', 'user', 'secret')
            *  @param {module:resources~Channel} channel - the channel that
            *    received the dtmf event
            */
-          function (event, channel) {
+           (event, channel) => {
 
-        var digit = event.digit;
+        const digit = event.digit;
         switch (digit) {
           case '5':
             // Record message
-            var opts = {
+            const opts = {
               format: 'wav',
               maxSilenceSeconds: '2',
               beep: true
             };
 
-            record(channel, opts)
-              .then(function () {
-                return play(channel, 'sound:vm-msgsaved');
+            record(ari, channel, opts)
+              .then(() => {
+                return play(ari, channel, 'sound:vm-msgsaved');
               })
-              .then(function () {
+              .then(() => {
                 // Update MWI
                 messages += 1;
-                var opts = {
+                const opts = {
                   oldMessages: 0,
                   newMessages: messages
                 };
 
                 return mailbox.update(opts);
               })
-              .then(function () {
+              .then(() => {
                 return channel.hangup();
               })
-              .catch(function (err) {});
+              .catch((err) => {});
             break;
           case '6':
             // Playback last message
             ari.recordings.listStored()
-              .then(function (recordings) {
-                var recording = recordings[recordings.length - 1];
+              .then((recordings) => {
+                const recording = recordings[recordings.length - 1];
 
                 if (!recording) {
-                  return play(channel, 'sound:vm-nomore');
+                  return play(ari, channel, 'sound:vm-nomore');
                 } else {
                   // Play the latest message
-                  var sound = util.format('recording:%s', recording.name);
+                  const sound = `recording:${recording.name}}`;
 
-                  return play(channel, sound)
-                    .then(function () {
+                  return play(ari, channel, sound)
+                    .then(() => {
                       return recording.deleteStored();
                     })
-                    .then(function () {
+                    .then(() => {
                       // Remove MWI
                       messages -= 1;
-                      var opts = {
+                      const opts = {
                         oldMessages: 0,
                         newMessages: messages
                       };
 
                       return mailbox.update(opts);
                     })
-                    .then(function () {
-                      return play(channel, 'sound:vm-next');
+                    .then(() => {
+                      return play(ari, channel, 'sound:vm-next');
                     });
                 }
               })
-              .catch(function (err) {});
+              .catch((err) => {});
             break;
         }
       });
 
       channel.answer()
-        .then(function () {
-          return play(channel, 'sound:vm-leavemsg')
-            .then(function () {
-              return play(channel, 'sound:vm-next');
+        .then(() => {
+          return play(ari, channel, 'sound:vm-leavemsg')
+            .then(() => {
+              return play(ari, channel, 'sound:vm-next');
             });
         })
-        .catch(function (err) {});
+        .catch((err) => {});
     });
-
-    // TODO: do the same for record
-
-    /**
-     *  Initiate a playback on the given channel.
-     *
-     *  @function play
-     *  @memberof example
-     *  @param {module:resources~Channel} channel - the channel to send the
-     *    playback to
-     *  @param {string} sound - the string identifier of the sound to play
-     *  @returns {Q} promise - a promise that will resolve to the finished
-     *                         playback
-     */
-    function play (channel, sound) {
-      var playback = ari.Playback();
-
-      return new Promise(function(resolve, reject) {
-        playback.once('PlaybackFinished',
-            /**
-             *  Once playback telling user how to leave a message has
-             *  finished, play message telling user how to play the
-             *  next available message.
-             *
-             *  @callback leaveMessageCallback
-             *  @memberof mwi-example
-             *  @param {Error} err - error object if any, null otherwise
-             *  @param {module:resources~Playback} newPlayback -
-             *    the playback object once it has finished
-             */
-            function (event, playback) {
-
-          resolve(playback);
-        });
-
-        channel.play({media: sound}, playback)
-          .catch(function (err) {
-            reject(err);
-          });
-      });
-    }
-
-    /**
-     *  Initiate a recording on the given channel.
-     *
-     *  @function record
-     *  @memberof example
-     *  @param {module:resources~Channel} channel - the channel to record
-     *  @param {object} opts - options to be passed to the record function
-     *  @returns {Q} promise - a promise that will resolve to the finished
-     *                         recording
-     */
-    function record (channel, opts) {
-      var recording = ari.LiveRecording();
-
-      return new Promise(function(resolve, reject) {
-        recording.once('RecordingFinished',
-            /**
-             *  Once the message has been recorded, play an announcement
-             *  that the message has been saved and update the mailbox
-             *  to show the new message count.
-             *
-             *  @callback recordingFinishedCallback
-             *  @memberof mwi-example
-             *  @param {Object} event - the full event object
-             *  @param {module:resources~LiveRecording} newRecording -
-             *    the recording object after creation
-             */
-            function (event, recording) {
-
-          resolve(recording);
-        });
-
-        channel.record(opts, recording)
-          .catch(function (err) {
-            reject(err);
-          });
-      });
-    }
 
     // can also use ari.start(['app-name'...]) to start multiple applications
     ari.start('mwi-example');
-})
-.done();  // program will crash if it fails to connect
+  })
+  .catch((err) => {
+    // handle error
+  });

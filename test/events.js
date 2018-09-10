@@ -10,63 +10,58 @@
 
 'use strict';
 
-var client = require('../lib/client.js');
-var _ = require('lodash');
-var util = require('util');
-var portfinder = require('portfinder');
-var http = require('http');
-var assert = require('assert');
-var helpers = require('./helpers.js');
+const client = require('../lib/client.js');
+const _ = require('lodash');
+const portfinder = require('portfinder');
+const http = require('http');
+const assert = require('assert');
+const helpers = require('./helpers.js');
 
-describe('events', function () {
+describe('events', () => {
 
-  var url = 'http://localhost:%s';
-  var user = 'user';
-  var pass = 'secret';
-  var ari = null;
-  var server = null;
-  var wsserver = null;
+  const user = 'user';
+  const pass = 'secret';
+  let url;
+  let ari;
+  let server;
+  let wsserver;
 
-  before(function (done) {
-    portfinder.getPort(function (err, port) {
+  before((done) => {
+    portfinder.getPort((err, port) => {
       assert.ifError(err);
 
       server = helpers.buildMockServer(port);
       server.realServer = http.createServer(server.handler);
-      server.realServer.listen(port, function () {
-        url = util.format(url, port);
-        client.connect(url, user, pass, function (err, connectedClient) {
+      server.realServer.listen(port, () => {
+        url = `http://localhost:${port}`;
+        client.connect(url, user, pass, (err, connectedClient) => {
           ari = connectedClient;
           wsserver = helpers.createWebSocketServer(server.realServer);
           ari.start('unittests');
 
           // ensure socket is connected before tests start
-          setTimeout(function () {
-            done();
-          }, 1000);
+          setTimeout(done, 1000);
         });
       });
     });
   });
 
-  after(function (done) {
+  after((done) => {
     ari.stop();
     server.realServer.close(done);
   });
 
-  describe('#client', function () {
-    it('should have event functions', function (done) {
+  describe('#client', () => {
+    it('should have event functions', () => {
       assert(_.isFunction(ari.on), 'on exists');
       assert(_.isFunction(ari.once), 'once exists');
       assert(_.isFunction(ari.addListener), 'addListener exists');
       assert(_.isFunction(ari.removeListener), 'removeListener exists');
-
-      done();
     });
 
-    it('should receive all events', function (done) {
-      var count = 0;
-      ari.on('PlaybackFinished', function (event, playback) {
+    it('should receive all events', (done) => {
+      let count = 0;
+      ari.on('PlaybackFinished', (event, playback) => {
         count += 1;
 
         if (count === 2) {
@@ -74,8 +69,8 @@ describe('events', function () {
         }
       });
 
-      for (var i = 0; i < 2; i++) {
-        var id = i.toString();
+      for (let i = 0; i < 2; i++) {
+        const id = i.toString();
         wsserver.send({
           type: 'PlaybackFinished',
           playback: {
@@ -88,9 +83,9 @@ describe('events', function () {
     });
   });
 
-  describe('#resources', function () {
-    it('should have event functions', function (done) {
-      var bridge = ari.Bridge();
+  describe('#resources', () => {
+    it('should have event functions', () => {
+      const bridge = ari.Bridge();
       assert(_.isFunction(bridge.on), 'on exists');
       assert(_.isFunction(bridge.addListener), 'addListener exists');
       assert(_.isFunction(bridge.removeListener), 'removeListener exists');
@@ -99,15 +94,13 @@ describe('events', function () {
         'removeAllListeners exists'
       );
       assert(_.isFunction(bridge.once), 'once exists');
-
-      done();
     });
 
-    it('should have scoped events', function (done) {
-      var count = 0;
-      var bridge1Count = 0;
+    it('should have scoped events', (done) => {
+      let count = 0;
+      let bridge1Count = 0;
       ari.removeAllListeners('BridgeDestroyed');
-      ari.on('BridgeDestroyed', function (event, bridge) {
+      ari.on('BridgeDestroyed', (event, bridge) => {
         count += 1;
 
         if (count === 2 && bridge1Count === 1) {
@@ -115,10 +108,10 @@ describe('events', function () {
         }
       });
 
-      var bridge1 = ari.Bridge();
-      var bridge2 = ari.Bridge();
+      const bridge1 = ari.Bridge();
+      const bridge2 = ari.Bridge();
 
-      bridge1.on('BridgeDestroyed', function (event, bridge) {
+      bridge1.on('BridgeDestroyed', (event, bridge) => {
         bridge1Count += 1;
       });
 
@@ -137,11 +130,11 @@ describe('events', function () {
       });
     });
 
-    it('should allow multiple scoped events', function (done) {
-      var count = 0;
-      var channel1Count = 0;
+    it('should allow multiple scoped events', (done) => {
+      let count = 0;
+      let channel1Count = 0;
       ari.removeAllListeners('ChannelDtmfReceived');
-      ari.on('ChannelDtmfReceived', function (event, channel) {
+      ari.on('ChannelDtmfReceived', (event, channel) => {
         count += 1;
 
         if (count === 2 && channel1Count === 2) {
@@ -149,14 +142,14 @@ describe('events', function () {
         }
       });
 
-      var channel1 = ari.Channel();
-      var channel2 = ari.Channel();
+      const channel1 = ari.Channel();
+      const channel2 = ari.Channel();
 
-      channel1.on('ChannelDtmfReceived', function (event, channel) {
+      channel1.on('ChannelDtmfReceived', (event, channel) => {
         channel1Count += 1;
       });
 
-      channel1.on('ChannelDtmfReceived', function (event, channel) {
+      channel1.on('ChannelDtmfReceived', (event, channel) => {
         channel1Count += 1;
       });
 
@@ -177,11 +170,11 @@ describe('events', function () {
       });
     });
 
-    it('should allow scoped events that fire only once', function (done) {
-      var count = 0;
-      var channel1Count = 0;
+    it('should allow scoped events that fire only once', (done) => {
+      let count = 0;
+      let channel1Count = 0;
       ari.removeAllListeners('ChannelDtmfReceived');
-      ari.on('ChannelDtmfReceived', function (event, channel) {
+      ari.on('ChannelDtmfReceived', (event, channel) => {
         count += 1;
 
         if (count === 2 && channel1Count === 1) {
@@ -189,9 +182,9 @@ describe('events', function () {
         }
       });
 
-      var channel1 = ari.Channel();
+      const channel1 = ari.Channel();
 
-      channel1.once('ChannelDtmfReceived', function (event, channel) {
+      channel1.once('ChannelDtmfReceived', (event, channel) => {
         channel1Count += 1;
         if (channel1Count > 1) {
           throw new Error('Should not have received this event');
@@ -215,11 +208,11 @@ describe('events', function () {
       });
     });
 
-    it('should allow removing specific scoped events', function (done) {
-      var count = 0;
-      var channel1Count = 0;
+    it('should allow removing specific scoped events', (done) => {
+      let count = 0;
+      let channel1Count = 0;
       ari.removeAllListeners('ChannelDtmfReceived');
-      ari.on('ChannelDtmfReceived', function (event, channel) {
+      ari.on('ChannelDtmfReceived', (event, channel) => {
         count += 1;
 
         if (count === 2 && channel1Count === 1) {
@@ -227,14 +220,14 @@ describe('events', function () {
         }
       });
 
-      var channel1 = ari.Channel();
-      var channel2 = ari.Channel();
+      const channel1 = ari.Channel();
+      const channel2 = ari.Channel();
 
-      channel1.on('ChannelDtmfReceived', function (event, channel) {
+      channel1.on('ChannelDtmfReceived', (event, channel) => {
         channel1Count += 1;
       });
 
-      var callback = function (event, channel) {
+      const callback = (event, channel) => {
         throw new Error('Should not have received this event');
       };
 
@@ -258,10 +251,10 @@ describe('events', function () {
       });
     });
 
-    it('should allow removing all scoped events', function (done) {
-      var count = 0;
+    it('should allow removing all scoped events', (done) => {
+      let count = 0;
       ari.removeAllListeners('ChannelDtmfReceived');
-      ari.on('ChannelDtmfReceived', function (event, channel) {
+      ari.on('ChannelDtmfReceived', (event, channel) => {
         count += 1;
 
         if (count === 2) {
@@ -269,13 +262,13 @@ describe('events', function () {
         }
       });
 
-      var channel1 = ari.Channel();
+      const channel1 = ari.Channel();
 
-      channel1.on('ChannelDtmfReceived', function (event, channel) {
+      channel1.on('ChannelDtmfReceived', (event, channel) => {
         throw new Error('Should not have received this event');
       });
 
-      channel1.on('ChannelDtmfReceived', function (event, channel) {
+      channel1.on('ChannelDtmfReceived', (event, channel) => {
         throw new Error('Should not have received this event');
       });
 

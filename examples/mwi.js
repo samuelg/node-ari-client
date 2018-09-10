@@ -15,8 +15,7 @@
 
 'use strict';
 
-var client = require('ari-client');
-var util = require('util');
+const client = require('ari-client');
 
 // replace ari.js with your Asterisk instance
 client.connect('http://ari.js:8088', 'user', 'secret',
@@ -28,11 +27,11 @@ client.connect('http://ari.js:8088', 'user', 'secret',
      *  @param {Error} err - error object if any, null otherwise
      *  @param {module:ari-client~Client} ari - ARI client
      */
-    function (err, ari) {
+    (err, ari) => {
 
   // Create new mailbox
-  var mailbox = ari.Mailbox('mwi-example');
-  var messages = 0;
+  const mailbox = ari.Mailbox('mwi-example');
+  let messages = 0;
 
   ari.on('StasisStart',
       /**
@@ -46,7 +45,7 @@ client.connect('http://ari.js:8088', 'user', 'secret',
        *  @param {module:resources~Channel} channel -
        *    the channel that entered Stasis
        */
-      function (event, channel) {
+      (event, channel) => {
 
     channel.on('ChannelDtmfReceived',
         /**
@@ -59,13 +58,13 @@ client.connect('http://ari.js:8088', 'user', 'secret',
          *  @param {module:resources~Channel} channel - the channel that
          *    received the dtmf event
          */
-        function (event, channel) {
+        (event, channel) => {
 
-      var digit = event.digit;
+      const digit = event.digit;
       switch (digit) {
         case '5':
           // Record message
-          var recording = ari.LiveRecording();
+          const recording = ari.LiveRecording();
 
           recording.once('RecordingFinished',
               /**
@@ -79,9 +78,9 @@ client.connect('http://ari.js:8088', 'user', 'secret',
                *  @param {module:resources~LiveRecording} newRecording -
                *    the recording object after creation
                */
-              function (event, newRecording) {
+              (event, newRecording) => {
 
-            var playback = ari.Playback();
+            const playback = ari.Playback();
             playback.once('PlaybackFinished',
                 /**
                  *  Once the playback announcing that the message has been saved
@@ -93,34 +92,34 @@ client.connect('http://ari.js:8088', 'user', 'secret',
                  *  @param {module:resources~Playback} newPlayback -
                  *    the playback object after it has been played
                  */
-                function (event, newPlayback) {
+                (event, newPlayback) => {
 
               // Update MWI
               messages += 1;
-              var opts = {
+              const opts = {
                 oldMessages: 0,
                 newMessages: messages
               };
-              mailbox.update(opts, function (err) {});
+              mailbox.update(opts, (err) => {});
 
-              channel.hangup(function (err) {});
+              channel.hangup((err) => {});
             });
 
             channel.play(
               {media: 'sound:vm-msgsaved'},
               playback,
-              function (err) {}
+              (err) => {}
             );
           });
 
-          var opts = {
+          const opts = {
             format: 'wav',
             maxSilenceSeconds: '2',
             beep: true
           };
 
           // Record a message
-          channel.record(opts, recording, function (err) {});
+          channel.record(opts, recording, (err) => {});
           break;
         case '6':
           // Playback last message
@@ -137,16 +136,16 @@ client.connect('http://ari.js:8088', 'user', 'secret',
                *  @param {module:resources~StoredRecording[]} recordings -
                *    the array of stored recordings that currently exist
                */
-              function (err, recordings) {
+              (err, recordings) => {
 
-            var playback = ari.Playback();
-            var recording = recordings[recordings.length - 1];
+            const playback = ari.Playback();
+            const recording = recordings[recordings.length - 1];
 
             if (!recording) {
               channel.play(
                 {media: 'sound:vm-nomore'},
                 playback,
-                function (err) {}
+                (err) => {}
               );
             } else {
               playback.once('PlaybackFinished',
@@ -160,7 +159,7 @@ client.connect('http://ari.js:8088', 'user', 'secret',
                    *  @param {module:resources~Playback} newPlayback -
                    *    the playback object after it has been played
                    */
-                  function (event, newPlayback) {
+                  (event, newPlayback) => {
 
                 recording.deleteStored(
                     /**
@@ -172,34 +171,27 @@ client.connect('http://ari.js:8088', 'user', 'secret',
                      *  @memberof mwi-example
                      *  @param {Error} err - error object if any, null otherwise
                      */
-                    function (err) {
+                    (err) => {
 
                   // Remove MWI
                   messages -= 1;
-                  var opts = {
+                  const opts = {
                     oldMessages: 0,
                     newMessages: messages
                   };
-                  mailbox.update(opts, function (err) {});
+                  mailbox.update(opts, (err) => {});
 
-                  var playback = ari.Playback();
+                  const playback = ari.Playback();
                   channel.play(
                     {media: 'sound:vm-next'},
                     playback,
-                    function (err) {}
+                    (err) => {}
                   );
                 });
               });
 
-              var opts = {
-                media: util.format(
-                  'recording:%s',
-                  recording.name
-                )
-              };
-
               // Play the latest message
-              channel.play(opts, playback, function (err) {});
+              channel.play({ media: `recording:${recording.name}` }, playback, (err) => {});
             }
           });
           break;
@@ -217,9 +209,9 @@ client.connect('http://ari.js:8088', 'user', 'secret',
          *  @memberof mwi-example
          *  @param {Error} err - error object is any, null otherwise
          */
-        function (err) {
+        (err) => {
 
-      var playback = ari.Playback();
+      let playback = ari.Playback();
 
       playback.once('PlaybackFinished',
           /**
@@ -232,20 +224,20 @@ client.connect('http://ari.js:8088', 'user', 'secret',
            *  @param {module:resources~Playback} newPlayback -
            *    the playback object once it has finished
            */
-          function (err, newPlayback) {
+          (err, newPlayback) => {
 
         playback = ari.Playback();
         channel.play(
           {media: 'sound:vm-next'},
           playback,
-          function (err) {}
+          (err) => {}
         );
       });
 
       channel.play(
         {media: 'sound:vm-leavemsg'},
         playback,
-        function (err) {}
+        (err) => {}
       );
     });
   });

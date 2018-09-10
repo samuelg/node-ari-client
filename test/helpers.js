@@ -9,12 +9,11 @@
 
 'use strict';
 
-var hock = require('hock');
-var fs = require('fs');
-var util = require('util');
-var moment = require('moment');
-var ws = require('ws');
-var portfinder = require('portfinder');
+const hock = require('hock');
+const fs = require('fs');
+const moment = require('moment');
+const ws = require('ws');
+const _ = require('lodash');
 
 /**
  *  Creates a web socket server that can be used to send messages to a unit test
@@ -26,8 +25,16 @@ var portfinder = require('portfinder');
  *  @returns {module:tests-helpers.WebSocketServer} web socket server
  */
 function createWebSocketServer (httpserver) {
-  var server = new ws.Server({server: httpserver});
-  var socket = null;
+  let server = new ws.Server({server: httpserver});
+  let socket = null;
+  /**
+   *  Store the incoming websocket for future use.
+   *
+   *  @param {WebSocket} socket - socket for the last connection
+   */
+  const processConnection = (websocket) => {
+    socket = websocket;
+  };
 
   server.on('connection', processConnection);
 
@@ -45,7 +52,7 @@ function createWebSocketServer (httpserver) {
      *
      *  @param {Object} msg - the json message to send
      */
-    send: function (msg) {
+    send(msg) {
       if (socket) {
         socket.send(JSON.stringify(msg));
       }
@@ -56,23 +63,13 @@ function createWebSocketServer (httpserver) {
      *
      *  This is intended to test client auto-reconnect.
      */
-    reconnect: function() {
-      server.close(function() {
+    reconnect() {
+      server.close(() => {
         server = new ws.Server({server: httpserver});
         server.on('connection', processConnection);
       });
     }
   };
-
-  /**
-   *  Store the incoming websocket for future use.
-   *
-   *  @param {WebSocket} socket - socket for the last connection
-   */
-  function processConnection(websocket) {
-    socket = websocket;
-  }
-
 }
 
 /**
@@ -84,110 +81,37 @@ function createWebSocketServer (httpserver) {
  *  @returns The hock mock server
  */
 function buildMockServer(port) {
-  var hockServer = hock.createHock();
+  const hockServer = hock.createHock();
 
-  var body = readJsonFixture('resources', port);
-  var headers = getJsonHeaders(body);
+  const body = readJsonFixture('resources', port);
+  const headers = getJsonHeaders(body);
   hockServer
       .get('/ari/api-docs/resources.json')
       .any()
       .reply(200, body, headers);
+  const resources = [
+    'recordings',
+    'bridges',
+    'endpoints',
+    'asterisk',
+    'sounds',
+    'channels',
+    'playbacks',
+    'deviceStates',
+    'mailboxes',
+    'applications',
+    'events',
+  ];
 
-  // setup recordings URI
-  body = readJsonFixture('recordings', port);
-  headers = getJsonHeaders(body);
-  hockServer
-      .get('/ari/api-docs/recordings.json')
+  // setup resource APIs
+  _.each(resources, (resource) => {
+    const resourceBody = readJsonFixture(resource, port);
+    const resourceHeaders = getJsonHeaders(resourceBody);
+    hockServer
+      .get(`/ari/api-docs/${resource}.json`)
       .any()
-      .reply(200, body, headers);
-
-  // setup bridges URI
-  body = readJsonFixture('bridges', port);
-  headers = getJsonHeaders(body);
-  hockServer
-      .get('/ari/api-docs/bridges.json')
-      .any()
-      .reply(200, body, headers);
-
-  // setup endpoints URI
-  body = readJsonFixture('endpoints', port);
-  headers = getJsonHeaders(body);
-  hockServer
-      .get('/ari/api-docs/endpoints.json')
-      .any()
-      .reply(200, body, headers);
-
-  // setup asterisk URI
-  body = readJsonFixture('asterisk', port);
-  headers = getJsonHeaders(body);
-  hockServer
-      .get('/ari/api-docs/asterisk.json')
-      .any()
-      .reply(200, body, headers);
-
-  // setup sounds URI
-  body = readJsonFixture('sounds', port);
-  headers = getJsonHeaders(body);
-  hockServer
-      .get('/ari/api-docs/sounds.json')
-      .any()
-      .reply(200, body, headers);
-
-  // setup channels URI
-  body = readJsonFixture('channels', port);
-  headers = getJsonHeaders(body);
-  hockServer
-      .get('/ari/api-docs/channels.json')
-      .any()
-      .reply(200, body, headers);
-
-  // setup playbacks URI
-  body = readJsonFixture('playbacks', port);
-  headers = getJsonHeaders(body);
-  hockServer
-      .get('/ari/api-docs/playbacks.json')
-      .any()
-      .reply(200, body, headers);
-
-  // setup deviceStates URI
-  body = readJsonFixture('deviceStates', port);
-  headers = getJsonHeaders(body);
-  hockServer
-      .get('/ari/api-docs/deviceStates.json')
-      .any()
-      .reply(200, body, headers);
-
-  // setup mailboxes URI
-  body = readJsonFixture('mailboxes', port);
-  headers = getJsonHeaders(body);
-  hockServer
-      .get('/ari/api-docs/mailboxes.json')
-      .any()
-      .reply(200, body, headers);
-
-  // setup applications URI
-  body = readJsonFixture('asterisk');
-  headers = getJsonHeaders(body);
-  hockServer
-      .get('/ari/api-docs/asterisk.json')
-      .any()
-      .reply(200, body, headers);
-
-  // setup applications URI
-  body = readJsonFixture('applications', port);
-  headers = getJsonHeaders(body);
-  hockServer
-      .get('/ari/api-docs/applications.json')
-      .any()
-      .reply(200, body, headers);
-
-  // setup events URI
-  body = readJsonFixture('events', port);
-  headers = getJsonHeaders(body);
-  hockServer
-      .get('/ari/api-docs/events.json')
-      .any()
-      .reply(200, body, headers);
+      .reply(200, resourceBody, resourceHeaders);
+  });
 
   return hockServer;
 }
@@ -200,12 +124,12 @@ function buildMockServer(port) {
  *  @private
  *  @param {string} filename - the name of the fixture
  *  @param {integer} port - the port the server is running on
- *  @returns {string} the string representation of the json fixture 
+ *  @returns {string} the string representation of the json fixture
  */
 function readJsonFixture (filename, port) {
   // remove the last newline if it exists
-  var json = fs.readFileSync(
-    util.format('%s/fixtures/%s.json', __dirname, filename),
+  const json = fs.readFileSync(
+    `${__dirname}/fixtures/${filename}.json`,
     'utf8'
   )
   .replace(/\n$/, '')
@@ -227,8 +151,8 @@ function getJsonHeaders (json) {
     'date': moment().utc().format('ddd, DD MMM YYYY HH:mm:ss [GMT]'),
     'connection': 'close',
     'cache-control': 'no-cache, no-store',
-    'content-length': util.format('%s', json.length),
-    'content-type': 'application/json'
+    'content-length': `${json.length}`,
+    'content-type': 'application/json',
   };
 }
 

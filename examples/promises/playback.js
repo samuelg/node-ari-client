@@ -15,12 +15,74 @@
 
 'use strict';
 
-var client = require('ari-client');
-var util = require('util');
+const client = require('ari-client');
+
+/**
+ *  Register playback dtmf events to control playback.
+ *
+ *  @function registerDtmfListeners
+ *  @memberof playback-example
+ *  @param {module:resources~Playback} playback - the playback object to
+ *    control
+ *  @param {module:resources~Channel} incoming - the incoming channel
+ *    responsible for playing and controlling the playback sound
+ */
+function registerDtmfListeners(playback, incoming) {
+  incoming.on('ChannelDtmfReceived',
+    /**
+     *  Handle DTMF events to control playback. 5 pauses the playback, 8
+     *  unpauses the playback, 4 moves the playback backwards, 6 moves the
+     *  playback forwards, 2 restarts the playback, and # stops the
+     *  playback and hangups the channel.
+     *
+     *  @callback channelDtmfReceivedCallback
+     *  @memberof playback-example
+     *  @param {Object} event - the full event object
+     *  @param {module:resources~Channel} channel - the channel on which
+     *    the dtmf event occured
+     */
+    (event, channel) => {
+
+      const digit = event.digit;
+
+      switch (digit) {
+        case '5':
+          playback.control({operation: 'pause'})
+            .catch((err) => {});
+          break;
+        case '8':
+          playback.control({operation: 'unpause'})
+            .catch((err) => {});
+          break;
+        case '4':
+          playback.control({operation: 'reverse'})
+            .catch((err) => {});
+          break;
+        case '6':
+          playback.control({operation: 'forward'})
+            .catch((err) => {});
+          break;
+        case '2':
+          playback.control({operation: 'restart'})
+            .catch((err) => {});
+          break;
+        case '#':
+          playback.control({operation: 'stop'})
+            .catch((err) => {});
+          incoming.hangup()
+            .finally(() => {
+              process.exit(0);
+            });
+          break;
+        default:
+          console.error(`Unknown DTMF ${digit}`);
+      }
+    });
+}
 
 // replace ari.js with your Asterisk instance
 client.connect('http://ari.js:8088', 'user', 'secret')
-  .then(function (ari) {
+  .then((ari) => {
 
     // Use once to start the application
     ari.once('StasisStart',
@@ -34,11 +96,11 @@ client.connect('http://ari.js:8088', 'user', 'secret')
          *  @param {module:resources~Channel} incoming - the channel entering
          *    Stasis
          */
-        function (event, incoming) {
+        (event, incoming) => {
 
       incoming.answer()
-        .then(function () {
-          var playback = ari.Playback();
+        .then(() => {
+          const playback = ari.Playback();
 
           // Play demo greeting and register dtmf event listeners
           return incoming.play(
@@ -46,76 +108,15 @@ client.connect('http://ari.js:8088', 'user', 'secret')
             playback
           );
         })
-        .then(function (playback) {
+        .then((playback) => {
           registerDtmfListeners(playback, incoming);
         })
-        .catch(function (err) {});
+        .catch((err) => {});
     });
-
-    /**
-     *  Register playback dtmf events to control playback.
-     *
-     *  @function registerDtmfListeners
-     *  @memberof playback-example
-     *  @param {module:resources~Playback} playback - the playback object to
-     *    control
-     *  @param {module:resources~Channel} incoming - the incoming channel
-     *    responsible for playing and controlling the playback sound
-     */
-    function registerDtmfListeners (playback, incoming) {
-      incoming.on('ChannelDtmfReceived',
-          /**
-           *  Handle DTMF events to control playback. 5 pauses the playback, 8
-           *  unpauses the playback, 4 moves the playback backwards, 6 moves the
-           *  playback forwards, 2 restarts the playback, and # stops the
-           *  playback and hangups the channel.
-           *
-           *  @callback channelDtmfReceivedCallback
-           *  @memberof playback-example
-           *  @param {Object} event - the full event object
-           *  @param {module:resources~Channel} channel - the channel on which
-           *    the dtmf event occured
-           */
-          function (event, channel) {
-
-        var digit = event.digit;
-
-        switch (digit) {
-          case '5':
-            playback.control({operation: 'pause'})
-              .catch(function (err) {});
-            break;
-          case '8':
-            playback.control({operation: 'unpause'})
-              .catch(function (err) {});
-            break;
-          case '4':
-            playback.control({operation: 'reverse'})
-              .catch(function (err) {});
-            break;
-          case '6':
-            playback.control({operation: 'forward'})
-              .catch(function (err) {});
-            break;
-          case '2':
-            playback.control({operation: 'restart'})
-              .catch(function (err) {});
-            break;
-          case '#':
-            playback.control({operation: 'stop'})
-              .catch(function (err) {});
-            incoming.hangup()
-              .finally(function () {
-                process.exit(0);
-              });
-            break;
-          default:
-            console.error(util.format('Unknown DTMF %s', digit));
-        }
-      });
-    }
 
     // can also use ari.start(['app-name'...]) to start multiple applications
     ari.start('playback-example');
-})
-.done(); // program will crash if it fails to connect
+  })
+  .catch((err) => {
+    // handle error
+  });

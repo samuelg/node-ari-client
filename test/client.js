@@ -9,16 +9,15 @@
 
 'use strict';
 
-var util = require('util');
-var assert = require('assert');
-var _ = require('lodash');
-var Promise = require('bluebird');
-var http = require('http');
-var portfinder = require('portfinder');
-var client = require('../lib/client.js');
-var helpers = require('./helpers.js');
+const assert = require('assert');
+const _ = require('lodash');
+const Promise = require('bluebird');
+const http = require('http');
+const portfinder = require('portfinder');
+const client = require('../lib/client.js');
+const helpers = require('./helpers.js');
 
-var operations = {
+const operations = {
   asterisk: [
     'getInfo',
     'getGlobalVar',
@@ -114,29 +113,28 @@ var operations = {
   ]
 };
 
-describe('client', function () {
+describe('client', () => {
 
-  var url = 'http://localhost:%s';
-  var hostIsNotReachableUrls =
-      {
-        ENOTFOUND: 'http://notthere:8088',
-        ECONNREFUSED: 'http://localhost:65535'
-      };
-  var user = 'user';
-  var pass = 'secret';
-  var ari = null;
-  var server = null;
-  var wsserver = null;
+  let url;
+  const hostIsNotReachableUrls = {
+    ENOTFOUND: 'http://notthere:8088',
+    ECONNREFUSED: 'http://localhost:65535',
+  };
+  const user = 'user';
+  const pass = 'secret';
+  let ari = null;
+  let server = null;
+  let wsserver = null;
 
-  before(function (done) {
-    portfinder.getPort(function (err, port) {
+  before((done) => {
+    portfinder.getPort((err, port) => {
       assert.ifError(err);
 
       server = helpers.buildMockServer(port);
       server.realServer = http.createServer(server.handler);
-      server.realServer.listen(port, function () {
-        url = util.format(url, port);
-        client.connect(url, user, pass, function (err, connectedClient) {
+      server.realServer.listen(port, () => {
+        url = `http://localhost:${port}`;
+        client.connect(url, user, pass, (err, connectedClient) => {
           ari = connectedClient;
           wsserver = helpers.createWebSocketServer(server.realServer);
           ari.start('unittests');
@@ -146,44 +144,42 @@ describe('client', function () {
     });
   });
 
-  after(function (done) {
+  after((done) => {
     ari.stop();
     server.realServer.close(done);
   });
 
-  it('should connect', function (done) {
+  it('should connect', (done) => {
     client.connect(url, user, pass, done);
   });
 
-  it('should send an error on ENOTFOUND', function (done) {
+  it('should send an error on ENOTFOUND', (done) => {
     client.connect(
-      hostIsNotReachableUrls.ENOTFOUND, user, pass, function (err) {
+      hostIsNotReachableUrls.ENOTFOUND, user, pass, (err) => {
       if (err && err.name === 'HostIsNotReachable') {
         done();
       } else {
-        assert.fail('Should not be able to connect to ' +
-          hostIsNotReachableUrls.ENOTFOUND);
+        assert.fail(`Should not be able to connect to ${hostIsNotReachableUrls.ENOTFOUND}`);
       }
     });
   });
 
-  it('should send an error on ECONNREFUSED', function (done) {
+  it('should send an error on ECONNREFUSED', (done) => {
     client.connect(
-      hostIsNotReachableUrls.ECONNREFUSED, user, pass, function (err) {
+      hostIsNotReachableUrls.ECONNREFUSED, user, pass, (err) => {
       if (err && err.name === 'HostIsNotReachable') {
         done();
       } else {
-        assert.fail('Should not be able to connect to ' +
-          hostIsNotReachableUrls.ECONNREFUSED);
+        assert.fail(`Should not be able to connect to ${hostIsNotReachableUrls.ECONNREFUSED}`);
       }
     });
   });
 
-  it('should auto-reconnect websocket', function (done) {
+  it('should auto-reconnect websocket', (done) => {
     wsserver.reconnect();
 
-    setTimeout(function() {
-      ari.on('PlaybackFinished', function(event, playback) {
+    setTimeout(() => {
+      ari.on('PlaybackFinished', (event, playback) => {
         assert(playback.id === 1);
 
         done();
@@ -198,10 +194,10 @@ describe('client', function () {
     }, 1000);
   });
 
-  it('should not auto-reconnect websocket after calling stop', function (done) {
+  it('should not auto-reconnect websocket after calling stop', (done) => {
     ari.stop();
 
-    setTimeout(function() {
+    setTimeout(() => {
       try {
         wsserver.send({
           type: 'PlaybackFinished'
@@ -214,58 +210,59 @@ describe('client', function () {
     }, 1000);
   });
 
-  it('send reconnect lifecycle events', function (done) {
-    client.connect(url, user, pass, function (err) {
+  it('send reconnect lifecycle events', (done) => {
+    client.connect(url, user, pass, (err) => {
       if (err) { return done(err); }
       wsserver.reconnect();
-      ari.once('WebSocketReconnecting', function () {
-        ari.once('WebSocketConnected', function () {
+      ari.once('WebSocketReconnecting', () => {
+        ari.once('WebSocketConnected', () => {
           done();
         });
       });
     });
   });
 
+  // note: need a function here to ensure the `this`reference points to mocha
   it('can reconnect a lot if it can successfully connect', function (done) {
-    var reconnectCount = 20;
+    let reconnectCount = 20;
 
     // this test might be a bit slow
     this.timeout(60000);
 
-    client.connect(url, user, pass, function (err) {
+    client.connect(url, user, pass, (err) => {
       if (err) { return done(err); }
 
-      function doItAgain() {
+      const doItAgain = () => {
         if (reconnectCount-- === 0) {
           done();
           return;
         }
 
         wsserver.reconnect();
-        ari.once('WebSocketConnected', function () {
+        ari.once('WebSocketConnected', () => {
           doItAgain();
         });
 
-        ari.once('WebSocketMaxRetries', function () {
+        ari.once('WebSocketMaxRetries', () => {
           assert.fail('Should not have given up reconnecting');
         });
-      }
+      };
 
       doItAgain();
     });
   });
 
-  it('should connect using promises', function (done) {
-    client.connect(url, user, pass).then(function (client) {
-      if (client) {
-        done();
+  it('should connect using promises', () => {
+    return client.connect(url, user, pass).then((client) => {
+      if (!client) {
+        throw new Error('should have a client here');
       }
-    }).done();
+    });
   });
 
-  it('should have all resources', function (done) {
-    var candidates = _.keys(ari);
-    var expected = [
+  it('should have all resources', () => {
+    const candidates = _.keys(ari);
+    const expected = [
       'asterisk',
       'applications',
       'bridges',
@@ -278,94 +275,92 @@ describe('client', function () {
       'recordings',
       'sounds'
     ];
-    _.each(expected, function (resource) {
+    _.each(expected, (resource) => {
       assert(_.includes(candidates, resource));
       assert(_.isObject(ari[resource]));
     });
-
-    done();
   });
 
-  it('should have all instance creators', function (done) {
-    var candidates = _.keys(ari);
-    var expected = [
+  it('should have all instance creators', () => {
+    const candidates = _.keys(ari);
+    const expected = [
       'Bridge',
       'Channel',
       'Playback',
       'LiveRecording'
     ];
-    _.each(expected, function (creator) {
+    _.each(expected, (creator) => {
       assert(_.includes(candidates, creator));
       assert(_.isFunction(ari[creator]));
     });
-
-    done();
   });
 
-  describe('#resources', function () {
-    _.each(operations, function (value, key) {
-      it(util.format('%s should have all operations', key), function (done) {
-        var candidates = _.keys(ari[key]);
-        var expected = value;
+  describe('#resources', () => {
+    _.each(operations, (value, key) => {
+      it(`${key} should have all operations`, () => {
+        const candidates = _.keys(ari[key]);
+        const expected = value;
 
-        _.each(expected, function (resource) {
+        _.each(expected, (resource) => {
           assert(_.includes(candidates, resource));
           assert(_.isFunction(ari[key][resource]));
         });
-
-        done();
       });
     });
 
-    it('should support promises', function (done) {
-      var bridge = ari.Bridge('promises');
+    it('should support promises', () => {
+      const bridge = ari.Bridge('promises');
 
       server
-        .post(util.format('/ari/bridges?type=holding&bridgeId=%s', bridge.id))
+        .post(`/ari/bridges?type=holding&bridgeId=${bridge.id}`)
         .any()
         .reply(200, {'bridge_type': 'holding', id: bridge.id});
+      const validate = (instance) => {
+        assert(_.isObject(instance));
+        assert.equal(instance.id, bridge.id);
 
-      ari.bridges.create({
+        _.each(operations.bridges, (operation) => {
+          assert(_.includes(_.keys(bridge), operation));
+        });
+      };
+
+      return ari.bridges.create({
         bridgeId: bridge.id,
         type: 'holding'
-      }).then(function (instance) {
+      }).then((instance) => {
         validate(instance);
 
         return instance.create({
           bridgeId: instance.id,
           type: 'holding'
         });
-      }).then(function (instance) {
+      }).then((instance) => {
         validate(instance);
+      });
+    });
 
-        done();
-      })
-      .done();
+    it('should work with promisify', () => {
+      const bridge = ari.Bridge('denodeify');
 
-      function validate(instance) {
+      server
+        .post(`/ari/bridges?type=holding&bridgeId=${bridge.id}`)
+        .any()
+        .reply(200, {'bridge_type': 'holding', id: bridge.id});
+      const validate = (instance) => {
         assert(_.isObject(instance));
         assert.equal(instance.id, bridge.id);
 
-        _.each(operations.bridges, function (operation) {
+        _.each(operations.bridges, (operation) => {
           assert(_.includes(_.keys(bridge), operation));
         });
-      }
-    });
+      };
 
-    it('should work with promisify', function (done) {
-      var bridge = ari.Bridge('denodeify');
+      let create = Promise.promisify(ari.bridges.create, ari);
 
-      server
-        .post(util.format('/ari/bridges?type=holding&bridgeId=%s', bridge.id))
-        .any()
-        .reply(200, {'bridge_type': 'holding', id: bridge.id});
-
-      var create = Promise.promisify(ari.bridges.create, ari);
-
-      create({
+      return create({
         bridgeId: bridge.id,
         type: 'holding'
-      }).then(function (instance) {
+      }).then((instance) => {
         validate(instance);
 
         create = Promise.promisify(instance.create, instance);
@@ -374,31 +369,18 @@ describe('client', function () {
           bridgeId: instance.id,
           type: 'holding'
         });
-      }).then(function (instance) {
+      }).then((instance) => {
         validate(instance);
-
-        done();
-      })
-      .done();
-
-      function validate(instance) {
-        assert(_.isObject(instance));
-        assert.equal(instance.id, bridge.id);
-
-        _.each(operations.bridges, function (operation) {
-          assert(_.includes(_.keys(bridge), operation));
-        });
-      }
+      });
     });
 
-    it('should not find resources that do not exist', function (done) {
-
+    it('should not find resources that do not exist', (done) => {
       server
         .get('/ari/bridges/1')
         .any()
         .reply(404, {'message': 'Bridge not found'});
 
-      ari.bridges.get({bridgeId: '1'}, function (err, bridge) {
+      ari.bridges.get({bridgeId: '1'}, (err, bridge) => {
         assert(bridge === undefined);
         assert(err.message.match('Bridge not found'));
 
@@ -406,24 +388,18 @@ describe('client', function () {
       });
     });
 
-    it('should not find resources that do not exist using promises',
-       function (done) {
-
+    it('should not find resources that do not exist using promises', () => {
       server
         .get('/ari/bridges/1')
         .any()
         .reply(404, {'message': 'Bridge not found'});
 
-      ari.bridges.get({bridgeId: '1'}).catch(function (err) {
+      return ari.bridges.get({bridgeId: '1'}).catch((err) => {
         assert(err.message.match('Bridge not found'));
-
-        done();
-      })
-      .done();
+      });
     });
 
-    it('should deal with a bad parameter', function (done) {
-
+    it('should deal with a bad parameter', (done) => {
       server
         .post('/ari/bridges?type=holding')
         .any()
@@ -435,12 +411,9 @@ describe('client', function () {
         .any()
         .reply(200, {'bridge_type': 'holding', id: '123443555.1'});
 
-      ari.bridges.create({type: 'holding'}, function (err, instance) {
-        ari.bridges.list(function (err, bridges) {
-          ari.bridges.get(
-              {bogus: '', bridgeId: bridges[0].id},
-              function (err, bridge) {
-
+      ari.bridges.create({type: 'holding'}, (err, instance) => {
+        ari.bridges.list((err, bridges) => {
+          ari.bridges.get({bogus: '', bridgeId: bridges[0].id}, (err, bridge) => {
             assert.equal(bridges[0].id, bridge.id);
 
             done();
@@ -449,8 +422,7 @@ describe('client', function () {
       });
     });
 
-    it('should deal with a bad parameter using promises', function (done) {
-
+    it('should deal with a bad parameter using promises', () => {
       server
         .post('/ari/bridges?type=holding')
         .any()
@@ -462,38 +434,34 @@ describe('client', function () {
         .any()
         .reply(200, {'bridge_type': 'holding', id: '123443555.1'});
 
-      ari.bridges.create({type: 'holding'}).then(function (instance) {
+      return ari.bridges.create({type: 'holding'}).then((instance) => {
         return ari.bridges.list();
       })
-      .then(function (bridges) {
+      .then((bridges) => {
         return ari.bridges.get({
           bogus: '',
           bridgeId: bridges[0].id
-        }).then(function (bridge) {
+        }).then((bridge) => {
           assert.equal(bridges[0].id, bridge.id);
-
-          done();
         });
-      })
-      .done();
+      });
     });
 
-    it('should pass ids to operations when appropriate', function (done) {
-
-      var bridge = ari.Bridge();
+    it('should pass ids to operations when appropriate', (done) => {
+      const bridge = ari.Bridge();
       server
-        .post(util.format('/ari/bridges?type=holding&bridgeId=%s', bridge.id))
+        .post(`/ari/bridges?type=holding&bridgeId=${bridge.id}`)
         .any()
         .reply(200, {'bridge_type': 'holding', id: bridge.id})
-        .get(util.format('/ari/bridges/%s', bridge.id))
+        .get(`/ari/bridges/${bridge.id}`)
         .any()
         .reply(200, {'bridge_type': 'holding', id: bridge.id});
 
       ari.bridges.create({
         bridgeId: bridge.id,
         type: 'holding'
-      }, function (err, bridge) {
-        bridge.get(function (err, instance) {
+      }, (err, bridge) => {
+        bridge.get((err, instance) => {
           assert.equal(instance.id, bridge.id);
 
           done();
@@ -501,112 +469,95 @@ describe('client', function () {
       });
     });
 
-    it('should pass ids to operations when appropriate using promises',
-     function (done) {
-
-      var bridge = ari.Bridge();
+    it('should pass ids to operations when appropriate using promises', () => {
+      const bridge = ari.Bridge();
       server
-        .post(util.format('/ari/bridges?type=holding&bridgeId=%s', bridge.id))
+        .post(`/ari/bridges?type=holding&bridgeId=${bridge.id}`)
         .any()
         .reply(200, {'bridge_type': 'holding', id: bridge.id})
-        .get(util.format('/ari/bridges/%s', bridge.id))
+        .get(`/ari/bridges/${bridge.id}`)
         .any()
         .reply(200, {'bridge_type': 'holding', id: bridge.id});
 
-      ari.bridges.create({
+      return ari.bridges.create({
         bridgeId: bridge.id,
         type: 'holding'
-      }).then(function (bridge) {
+      }).then((bridge) => {
         return bridge.get();
       })
-      .then(function (instance) {
+      .then((instance) => {
         assert.equal(instance.id, bridge.id);
-
-        done();
-      })
-      .done();
+      });
     });
   });
 
-  describe('#creators', function () {
-    it('should generate unique ids', function (done) {
-      var bridge = ari.Bridge();
-      var bridge2 = ari.Bridge();
-      var regex = /[a-z0-9]{8}(-[a-z0-9]{4}){3}-[a-z0-9]{12}/;
+  describe('#creators', () => {
+    it('should generate unique ids', () => {
+      const bridge = ari.Bridge();
+      const bridge2 = ari.Bridge();
+      const regex = /[a-z0-9]{8}(-[a-z0-9]{4}){3}-[a-z0-9]{12}/;
 
       assert.notEqual(bridge.id, bridge2);
       assert(bridge.id);
       assert(bridge2.id);
       assert(regex.exec(bridge.id));
       assert(regex.exec(bridge2.id));
-
-      done();
     });
 
-    it('should have all operations', function (done) {
-      var bridge = ari.Bridge();
+    it('should have all operations', () => {
+      const bridge = ari.Bridge();
 
-      _.each(operations.bridges, function (operation) {
+      _.each(operations.bridges, (operation) => {
         _.includes(_.keys(bridge), operation);
       });
-
-      done();
     });
 
-    it('should pass unique id when calling a create method', function (done) {
-      var bridge = ari.Bridge();
+    it('should pass unique id when calling a create method', (done) => {
+      const bridge = ari.Bridge();
 
       server
-        .post(util.format('/ari/bridges?type=holding&bridgeId=%s', bridge.id))
+        .post(`/ari/bridges?type=holding&bridgeId=${bridge.id}`)
         .any()
         .reply(200, {'bridge_type': 'holding', id: bridge.id});
 
-      bridge.create({type: 'holding'}, function (err, instance) {
+      bridge.create({type: 'holding'}, (err, instance) => {
         assert.equal(instance.id, bridge.id);
 
         done();
       });
     });
 
-    it('should pass unique id when calling a create method using promises',
-       function (done) {
+    it('should pass unique id when calling a create method using promises', () => {
 
-      var bridge = ari.Bridge();
+      const bridge = ari.Bridge();
 
       server
-        .post(util.format('/ari/bridges?type=holding&bridgeId=%s', bridge.id))
+        .post(`/ari/bridges?type=holding&bridgeId=${bridge.id}`)
         .any()
         .reply(200, {'bridge_type': 'holding', id: bridge.id});
 
-      bridge.create({type: 'holding'}).then(function (instance) {
+      return bridge.create({type: 'holding'}).then((instance) => {
         assert.equal(instance.id, bridge.id);
-
-        done();
-      })
-      .done();
+      });
     });
 
-    it('should pass instance id when calling a create method', function (done) {
-      var bridge = ari.Bridge();
-      var recording = ari.LiveRecording();
+    it('should pass instance id when calling a create method', (done) => {
+      const bridge = ari.Bridge();
+      const recording = ari.LiveRecording();
 
       server
-        .post(util.format('/ari/bridges?type=holding&bridgeId=%s', bridge.id))
+        .post(`/ari/bridges?type=holding&bridgeId=${bridge.id}`)
         .any()
         .reply(200, {'bridge_type': 'holding', id: bridge.id})
         .post(
-          util.format(
-            '/ari/bridges/%s/record?name=%s&format=wav&maxDurationSeconds=1',
-            bridge.id,
-            recording.name
-          )
+          `/ari/bridges/${bridge.id}/record?name=${recording.name}&format=wav&maxDurationSeconds=1`
         )
         .any()
         .reply(200, {format: 'wav', name: recording.name});
 
-      bridge.create({type: 'holding'}, function (err, bridgeInstance) {
-        var opts = {format: 'wav', maxDurationSeconds: '1'};
-        bridge.record(opts, recording, function (err, instance) {
+      bridge.create({type: 'holding'}, (err, bridgeInstance) => {
+        const opts = {format: 'wav', maxDurationSeconds: '1'};
+        bridge.record(opts, recording, (err, instance) => {
           assert(instance.name);
           assert.equal(instance.name, recording.name);
 
@@ -615,141 +566,113 @@ describe('client', function () {
       });
     });
 
-    it('should pass instance id when calling a create method using promises',
-       function (done) {
-
-      var bridge = ari.Bridge();
-      var recording = ari.LiveRecording();
+    it('should pass instance id when calling a create method using promises', () => {
+      const bridge = ari.Bridge();
+      const recording = ari.LiveRecording();
 
       server
-        .post(util.format('/ari/bridges?type=holding&bridgeId=%s', bridge.id))
+        .post(`/ari/bridges?type=holding&bridgeId=${bridge.id}`)
         .any()
         .reply(200, {'bridge_type': 'holding', id: bridge.id})
         .post(
-          util.format(
-            '/ari/bridges/%s/record?name=%s&format=wav&maxDurationSeconds=1',
-            bridge.id,
-            recording.name
-          )
+          `/ari/bridges/${bridge.id}/record?name=${recording.name}&format=wav&maxDurationSeconds=1`
         )
         .any()
         .reply(200, {format: 'wav', name: recording.name});
 
-      bridge.create({type: 'holding'}).then(function (bridgeInstance) {
-        var opts = {format: 'wav', maxDurationSeconds: '1'};
+      return bridge.create({type: 'holding'}).then((bridgeInstance) => {
+        const opts = {format: 'wav', maxDurationSeconds: '1'};
 
         return bridge.record(opts, recording);
-      }).then(function (instance) {
+      }).then((instance) => {
         assert(instance.name);
         assert.equal(instance.name, recording.name);
-
-        done();
-      })
-      .done();
+      });
     });
 
-    it('should not modify options passed in to operations', function (done) {
-      var bridge = ari.Bridge();
+    it('should not modify options passed in to operations', (done) => {
+      const bridge = ari.Bridge();
 
       server
-        .post(util.format('/ari/bridges?type=mixing&bridgeId=%s', bridge.id))
+        .post(`/ari/bridges?type=mixing&bridgeId=${bridge.id}`)
         .any()
         .reply(200, {'bridge_type': 'mixing', id: bridge.id})
         .post(
-          util.format(
-            '/ari/applications/unittests/subscription?eventSource=bridge%3A%s',
-            bridge.id
-          )
+          `/ari/applications/unittests/subscription?eventSource=bridge%3A${bridge.id}`
         )
         .any()
         .reply(200, {name: 'unittests', 'bridge_ids': [bridge.id]});
 
-      bridge.create({type: 'mixing'}, function (err, newBridge) {
-        var opts = {
+      bridge.create({type: 'mixing'}, (err, newBridge) => {
+        const opts = {
           applicationName: 'unittests',
-          eventSource: util.format('bridge:%s', bridge.id)
+          eventSource: `bridge:${bridge.id}`,
         };
 
-        ari.applications.subscribe(opts, function (err, application) {
+        ari.applications.subscribe(opts, (err, application) => {
           assert(application);
           assert.equal(application['bridge_ids'][0], bridge.id);
           assert.equal(opts.applicationName, 'unittests');
-          assert.equal(opts.eventSource, util.format('bridge:%s', bridge.id));
+          assert.equal(opts.eventSource, `bridge:${bridge.id}`);
 
           done();
         });
       });
     });
 
-    it('should not modify options passed in to operations using promises',
-       function (done) {
-
-      var bridge = ari.Bridge();
+    it('should not modify options passed in to operations using promises', () => {
+      const bridge = ari.Bridge();
 
       server
-        .post(util.format('/ari/bridges?type=mixing&bridgeId=%s', bridge.id))
+        .post(`/ari/bridges?type=mixing&bridgeId=${bridge.id}`)
         .any()
         .reply(200, {'bridge_type': 'mixing', id: bridge.id})
         .post(
-          util.format(
-            '/ari/applications/unittests/subscription?eventSource=bridge%3A%s',
-            bridge.id
-          )
+          `/ari/applications/unittests/subscription?eventSource=bridge%3A${bridge.id}`
         )
         .any()
         .reply(200, {name: 'unittests', 'bridge_ids': [bridge.id]});
 
-      var opts = {
+      const opts = {
         applicationName: 'unittests',
-        eventSource: util.format('bridge:%s', bridge.id)
+        eventSource: `bridge:${bridge.id}`,
       };
 
-      bridge.create({type: 'mixing'}).then(function (newBridge) {
+      return bridge.create({type: 'mixing'}).then((newBridge) => {
         return ari.applications.subscribe(opts);
-      }).then(function (application) {
+      }).then((application) => {
         assert(application);
         assert.equal(application['bridge_ids'][0], bridge.id);
         assert.equal(opts.applicationName, 'unittests');
-        assert.equal(opts.eventSource, util.format('bridge:%s', bridge.id));
-
-        done();
-      })
-      .done();
+        assert.equal(opts.eventSource, `bridge:${bridge.id}`);
+      });
     });
 
-    it('should allow passing in id on creation', function (done) {
-      var recording = ari.LiveRecording('mine');
-      var channel = ari.Channel('1234');
+    it('should allow passing in id on creation', () => {
+      const recording = ari.LiveRecording('mine');
+      const channel = ari.Channel('1234');
 
       assert.equal(recording.name, 'mine');
       assert.equal(channel.id, '1234');
-
-      done();
     });
 
-    it('should allow passing in values on creation', function (done) {
-      var mailbox = ari.Mailbox({name: '1234', oldMessages: 0});
+    it('should allow passing in values on creation', () => {
+      const mailbox = ari.Mailbox({name: '1234', oldMessages: 0});
 
       assert.equal(mailbox.name, '1234');
       assert.equal(mailbox.oldMessages, 0);
-
-      done();
     });
 
-    it('should allow passing in id and values on creation', function (done) {
-      var mailbox = ari.Mailbox('1234', {oldMessages: 0});
+    it('should allow passing in id and values on creation', () => {
+      const mailbox = ari.Mailbox('1234', {oldMessages: 0});
 
       assert.equal(mailbox.name, '1234');
       assert.equal(mailbox.oldMessages, 0);
-
-      done();
     });
 
-    it('should allow passing function variables to client or resource',
-        function (done) {
-
-      var channel = ari.Channel();
-      var body = '{"variables":{"CALLERID(name)":"Alice"}}';
+    it('should allow passing function variables to client or resource', (done) => {
+      const channel = ari.Channel();
+      const body = '{"variables":{"CALLERID(name)":"Alice"}}';
 
       server
         .post(
@@ -759,23 +682,20 @@ describe('client', function () {
         .any()
         .reply(200, {id: '1'})
         .post(
-          util.format(
-            '/ari/channels?endpoint=PJSIP%2Fsoftphone&app=unittests&channelId=%s',
-            channel.id
-          ),
+          `/ari/channels?endpoint=PJSIP%2Fsoftphone&app=unittests&channelId=${channel.id}`,
           body
         )
         .any()
         .reply(200, {id: '1'});
 
-      var options = {
+      const options = {
         endpoint: 'PJSIP/softphone',
         app: 'unittests',
         variables: {'CALLERID(name)': 'Alice'}
       };
-      ari.channels.originate(options, function (err, channel) {
+      ari.channels.originate(options, (err, channel) => {
         if (!err) {
-          channel.originate(options, function (err, channel) {
+          channel.originate(options, (err, channel) => {
             if (!err) {
               done();
             }
@@ -784,11 +704,9 @@ describe('client', function () {
       });
     });
 
-    it('should allow passing function variables ' +
-       'to client or resource using promises', function (done) {
-
-      var channel = ari.Channel();
-      var body = '{"variables":{"CALLERID(name)":"Bob"}}';
+    it('should allow passing function variables to client or resource using promises', () => {
+      const channel = ari.Channel();
+      const body = '{"variables":{"CALLERID(name)":"Bob"}}';
 
       server
         .post(
@@ -798,35 +716,29 @@ describe('client', function () {
         .any()
         .reply(200, {id: '1'})
         .post(
-          util.format(
-            '/ari/channels?endpoint=PJSIP%2Fsoftphone&app=unittests&channelId=%s',
-            channel.id
-          ),
+          `/ari/channels?endpoint=PJSIP%2Fsoftphone&app=unittests&channelId=${channel.id}`,
           body
         )
         .any()
         .reply(200, {id: '1'});
 
-      var options = {
+      const options = {
         endpoint: 'PJSIP/softphone',
         app: 'unittests',
         variables: {'CALLERID(name)': 'Bob'}
       };
 
-      ari.channels.originate(options).then(function (channel) {
+      return ari.channels.originate(options).then((channel) => {
         return channel.originate(options);
       })
-      .then(function (channel) {
-        done();
-      })
-      .done();
+      .then((channel) => {
+        assert(channel);
+      });
     });
 
-    it('should allow passing standard variables to client or resource',
-        function (done) {
-
-      var channel = ari.Channel();
-      var body = '{"variables":{"CUSTOM":"myvar"}}';
+    it('should allow passing standard variables to client or resource', (done) => {
+      const channel = ari.Channel();
+      const body = '{"variables":{"CUSTOM":"myvar"}}';
 
       server
         .post(
@@ -836,23 +748,20 @@ describe('client', function () {
         .any()
         .reply(200, {id: '1'})
         .post(
-          util.format(
-            '/ari/channels?endpoint=PJSIP%2Fsoftphone&app=unittests&channelId=%s',
-            channel.id
-          ),
+          `/ari/channels?endpoint=PJSIP%2Fsoftphone&app=unittests&channelId=${channel.id}`,
           body
         )
         .any()
         .reply(200, {id: '1'});
 
-      var options = {
+      const options = {
         endpoint: 'PJSIP/softphone',
         app: 'unittests',
         variables: {'CUSTOM': 'myvar'}
       };
-      ari.channels.originate(options, function (err, channel) {
+      ari.channels.originate(options, (err, channel) => {
         if (!err) {
-          channel.originate(options, function (err, channel) {
+          channel.originate(options, (err, channel) => {
             if (!err) {
               done();
             }
@@ -861,11 +770,9 @@ describe('client', function () {
       });
     });
 
-    it('should allow passing standard variables ' +
-       'to client or resource using promises', function (done) {
-
-      var channel = ari.Channel();
-      var body = '{"variables":{"CUSTOM":"myothervar"}}';
+    it('should allow passing standard variables to client or resource using promises', () => {
+      const channel = ari.Channel();
+      const body = '{"variables":{"CUSTOM":"myothervar"}}';
 
       server
         .post(
@@ -875,28 +782,24 @@ describe('client', function () {
         .any()
         .reply(200, {id: '1'})
         .post(
-          util.format(
-            '/ari/channels?endpoint=PJSIP%2Fsoftphone&app=unittests&channelId=%s',
-            channel.id
-          ),
+          `/ari/channels?endpoint=PJSIP%2Fsoftphone&app=unittests&channelId=${channel.id}`,
           body
         )
         .any()
         .reply(200, {id: '1'});
 
-      var options = {
+      const options = {
         endpoint: 'PJSIP/softphone',
         app: 'unittests',
         variables: {'CUSTOM': 'myothervar'}
       };
 
-      ari.channels.originate(options).then(function (channel) {
+      return ari.channels.originate(options).then((channel) => {
         return channel.originate(options);
       })
       .then(function (channel) {
-        done();
-      })
-      .done();
+        assert(channel);
+      });
     });
 
   });

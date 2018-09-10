@@ -16,10 +16,9 @@
 
 'use strict';
 
-var client = require('ari-client');
-var util = require('util');
+const client = require('ari-client');
 
-var BRIDGE_STATE = 'device-state-example';
+const BRIDGE_STATE = 'device-state-example';
 
 // replace ari.js with your Asterisk instance
 client.connect('http://ari.js:8088', 'user', 'secret',
@@ -31,12 +30,12 @@ client.connect('http://ari.js:8088', 'user', 'secret',
      *  @param {Error} err - error object if any, null otherwise
      *  @param {module:ari-client~Client} ari - ARI client
      */
-    function (err, ari) {
+    (err, ari) => {
 
-  var bridge = ari.Bridge();
+  const bridge = ari.Bridge();
   // Keep track of bridge state at the application level so we don't have to
   // make extra calls to ARI
-  var currentBridgeState = 'NOT_INUSE';
+  let currentBridgeState = 'NOT_INUSE';
 
   bridge.create({type: 'mixing'},
       /**
@@ -47,14 +46,14 @@ client.connect('http://ari.js:8088', 'user', 'secret',
        *  @param {Error} err - error object if any, null otherwise
        *  @param {module:resources~Bridge} instance - the created bridge
        */
-      function (err, instance) {
+      (err, instance) => {
 
     // Mark this bridge as available
-    var opts = {
-      deviceName: util.format('Stasis:%s', BRIDGE_STATE),
+    const opts = {
+      deviceName: `Stasis:${BRIDGE_STATE}`,
       deviceState: 'NOT_INUSE'
     };
-    ari.deviceStates.update(opts, function (err) {});
+    ari.deviceStates.update(opts, (err) => {});
   });
 
   ari.on('ChannelEnteredBridge',
@@ -67,15 +66,15 @@ client.connect('http://ari.js:8088', 'user', 'secret',
        *  @param {Error} err - error object if any, null otherwise
        *  @param {Object} objects - object of resources (bridge and channel)
        */
-      function (event, objects) {
+      (event, objects) => {
 
     if (objects.bridge.channels.length > 0 && currentBridgeState !== 'BUSY') {
       // Mark this bridge as busy
-      var opts = {
-        deviceName: util.format('Stasis:%s', BRIDGE_STATE),
+      const opts = {
+        deviceName: `Stasis:${BRIDGE_STATE}`,
         deviceState: 'BUSY'
       };
-      ari.deviceStates.update(opts, function (err) {});
+      ari.deviceStates.update(opts, (err) => {});
       currentBridgeState = 'BUSY';
     }
   });
@@ -89,17 +88,17 @@ client.connect('http://ari.js:8088', 'user', 'secret',
        *  @param {Error} err - error object if any, null otherwise
        *  @param {Object} objects - object of resources (bridge and channel)
        */
-      function (event, objects) {
+      (event, objects) => {
 
     if (objects.bridge.channels.length === 0 &&
         currentBridgeState !== 'NOT_INUSE') {
 
       // Mark this bridge as available
-      var opts = {
-        deviceName: util.format('Stasis:%s', BRIDGE_STATE),
+      const opts = {
+        deviceName: `Stasis:${BRIDGE_STATE}`,
         deviceState: 'NOT_INUSE'
       };
-      ari.deviceStates.update(opts, function (err) {});
+      ari.deviceStates.update(opts, (err) => {});
       currentBridgeState = 'NOT_INUSE';
     }
   });
@@ -114,10 +113,10 @@ client.connect('http://ari.js:8088', 'user', 'secret',
        *  @param {module:resources~Channel} incoming -
        *    channel that has entered Stasis
        */
-      function (event, incoming) {
+      (event, incoming) => {
 
-    incoming.answer(function (err, channel) {
-      bridge.addChannel({channel: incoming.id}, function (err) {});
+    incoming.answer((err, channel) => {
+      bridge.addChannel({channel: incoming.id}, (err) => {});
     });
   });
 

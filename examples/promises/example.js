@@ -15,13 +15,39 @@
 
 'use strict';
 
-var client = require('ari-client');
-var Promise = require('bluebird');
-var util = require('util');
+const client = require('ari-client');
+const Promise = require('bluebird');
+
+/**
+ *  Initiate a playback on the given channel.
+ *
+ *  @function play
+ *  @memberof example
+ *  @param {module:ari-client~Client} ari - an ARI client instance
+ *  @param {module:resources~Channel} channel - the channel to send the
+ *    playback to
+ *  @param {string} sound - the string identifier of the sound to play
+ *  @returns {Q} promise - a promise that will resolve to the finished
+ *                         playback
+ */
+function play(ari, channel, sound) {
+  const playback = ari.Playback();
+
+  return new Promise((resolve, reject) => {
+    playback.once('PlaybackFinished', (event, playback) => {
+      resolve(playback);
+    });
+
+    channel.play({media: sound}, playback)
+      .catch((err) => {
+        reject(err);
+      });
+  });
+}
 
 // replace ari.js with your Asterisk instance
 client.connect('http://ari.js:8088', 'user', 'secret')
-  .then(function (ari) {
+  .then((ari) => {
 
     // Use once to start the application
     ari.on('StasisStart',
@@ -35,7 +61,7 @@ client.connect('http://ari.js:8088', 'user', 'secret')
          *  @param {module:resources~Channel} incoming -
          *    the channel that entered Stasis
          */
-        function (event, incoming) {
+        (event, incoming) => {
 
       // Handle DTMF events
       incoming.on('ChannelDtmfReceived',
@@ -50,61 +76,37 @@ client.connect('http://ari.js:8088', 'user', 'secret')
            *  @param {module:resources~Channel} channel - the channel that
            *    received the dtmf event
            */
-          function (event, channel) {
+          (event, channel) => {
 
-        var digit = event.digit;
+        const digit = event.digit;
         switch (digit) {
           case '#':
-            play(channel, 'sound:vm-goodbye')
-              .then(function () {
+            play(ari, channel, 'sound:vm-goodbye')
+              .then(() => {
                 return channel.hangup();
               })
-              .finally(function () {
+              .finally(() => {
                 process.exit(0);
               });
             break;
           case '*':
-            play(channel, 'sound:tt-monkeys');
+            play(ari, channel, 'sound:tt-monkeys');
             break;
           default:
-            play(channel, util.format('sound:digits/%s', digit));
+            play(ari, channel, `sound:digits/${digit}`);
         }
       });
 
       incoming.answer()
-        .then(function () {
-          play(incoming, 'sound:hello-world');
+        .then(() => {
+          play(ari, incoming, 'sound:hello-world');
         })
-        .catch(function (err) {});
+        .catch((err) => {});
     });
-
-    /**
-     *  Initiate a playback on the given channel.
-     *
-     *  @function play
-     *  @memberof example
-     *  @param {module:resources~Channel} channel - the channel to send the
-     *    playback to
-     *  @param {string} sound - the string identifier of the sound to play
-     *  @returns {Q} promise - a promise that will resolve to the finished
-     *                         playback
-     */
-    function play (channel, sound) {
-      var playback = ari.Playback();
-
-      return new Promise(function(resolve, reject) {
-        playback.once('PlaybackFinished', function (event, playback) {
-          resolve(playback);
-        });
-
-        channel.play({media: sound}, playback)
-          .catch(function (err) {
-            reject(err);
-          });
-      });
-    }
 
     // can also use ari.start(['app-name'...]) to start multiple applications
     ari.start('example');
   })
-  .done(); // program will crash if it fails to connect
+  .catch((err) => {
+    // handle error
+  });

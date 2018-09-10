@@ -16,9 +16,122 @@
 
 'use strict';
 
-var client = require('ari-client');
+const client = require('ari-client');
 
-var ENDPOINT = 'PJSIP/sipphone';
+const ENDPOINT = 'PJSIP/sipphone';
+
+/**
+ *  Originate the outgoing channel
+ *
+ *  @function originate
+ *  @memberof originate-example
+ *  @param {module:ari-client~Client} ari - an ARI client instance
+ *  @param {module:resources~Channel} incoming - the incoming channel that
+ *    will originate the call to the endpoint
+ */
+function originate(ari, incoming) {
+  incoming.once('StasisEnd',
+    /**
+     *  If the incoming channel ends, hangup the outgoing channel.
+     *
+     *  @callback incomingStasisEndCallback
+     *  @memberof originate-example
+     *  @param {Object} event - the full event object
+     *  @param {module:resources~Channel} channel -
+     *    the incoming channel leaving Stasis
+     */
+    (event, channel) => {
+
+      outgoing.hangup((err) => {});
+    });
+
+  const outgoing = ari.Channel();
+
+  outgoing.once('ChannelDestroyed',
+    /**
+     *  If the endpoint rejects the call, hangup the incoming channel.
+     *
+     *  @callback outgoingChannelDestroyedCallback
+     *  @memberof originate-example
+     *  @param {Object} event - the full event object
+     *  @param {module:resources~Channel} channel -
+     *    the channel that was destroyed
+     */
+    (event, channel) => {
+
+      incoming.hangup((err) => {});
+    });
+
+  outgoing.once('StasisStart',
+    /**
+     *  When the outgoing channel enters Stasis, create a mixing bridge
+     *  and join the channels together.
+     *
+     *  @callback outgoingStasisStartCallback
+     *  @memberof originate-example
+     *  @param {Object} event - the full event object
+     *  @param {module:resources~Channel} outgoing -
+     *    the outgoing channel entering Stasis
+     */
+    (event, outgoing) => {
+
+      const bridge = ari.Bridge();
+
+      outgoing.once('StasisEnd',
+        /**
+         *  If the outgoing channel ends, clean up the bridge.
+         *
+         *  @callback outgoingStasisEndCallback
+         *  @memberof originate-example
+         *  @param {Object} event - the full event object
+         *  @param {module:resources~Channel} channel -
+         *    the outgoing channel leaving Stasis
+         */
+        (event, channel) => {
+
+          bridge.destroy((err) => {});
+        });
+
+      outgoing.answer(
+        /**
+         *  Once the outgoing channel has been answered, create a mixing
+         *  bridge and add the incoming and outgoing channels to it.
+         *
+         *  @callback outgoingAnswerCallback
+         *  @memberof originate-example
+         *  @param {Error} err - error object if any, null otherwise
+         */
+        (err) => {
+
+          bridge.create({type: 'mixing'},
+            /**
+             *  Once the mixing bridge has been created, join the incoming and
+             *  outgoing channels to it.
+             *
+             *  @callback bridgeCreateCallback
+             *  @memberof originate-example
+             *  @param {Error} err - error object if any, null otherwise
+             *  @param {module:resources~Bridge} bridge - the newly created
+             *    mixing bridge
+             */
+            (err, bridge) => {
+
+              bridge.addChannel(
+                {channel: [incoming.id, outgoing.id]},
+                (err) => {}
+              );
+            });
+        });
+    });
+
+  const playback = ari.Playback();
+  incoming.play({media: 'sound:vm-dialout'}, playback, (err) => {});
+
+  // Originate call from incoming channel to endpoint
+  outgoing.originate(
+    { endpoint: ENDPOINT, app: 'originate-example', appArgs: 'dialed' }, (err, channel) => {}
+  );
+}
 
 // replace ari.js with your Asterisk instance
 client.connect('http://ari.js:8088', 'user', 'secret',
@@ -30,7 +143,7 @@ client.connect('http://ari.js:8088', 'user', 'secret',
      *  @param {Error} err - error object if any, null otherwise
      *  @param {module:ari-client~Client} ari - ARI client
      */
-    function (err, ari) {
+    (err, ari) => {
 
   // Use once to start the application to ensure this listener will only run
   // for the incoming channel
@@ -45,125 +158,12 @@ client.connect('http://ari.js:8088', 'user', 'secret',
        *  @param {module:resources~Channel} incoming -
        *    the incoming channel entering Stasis
        */
-      function (event, incoming) {
+      (event, incoming) => {
 
-    incoming.answer(function (err) {
-      originate(incoming);
+    incoming.answer((err) => {
+      originate(ari, incoming);
     });
   });
-
-  /**
-   *  Originate the outgoing channel
-   *
-   *  @function originate
-   *  @memberof originate-example
-   *  @param {module:resources~Channel} incoming - the incoming channel that
-   *    will originate the call to the endpoint
-   */
-  function originate (incoming) {
-    incoming.once('StasisEnd',
-        /**
-         *  If the incoming channel ends, hangup the outgoing channel.
-         *
-         *  @callback incomingStasisEndCallback
-         *  @memberof originate-example
-         *  @param {Object} event - the full event object
-         *  @param {module:resources~Channel} channel -
-         *    the incoming channel leaving Stasis
-         */
-        function (event, channel) {
-
-      outgoing.hangup(function (err) {});
-    });
-
-    var outgoing = ari.Channel();
-
-    outgoing.once('ChannelDestroyed',
-        /**
-         *  If the endpoint rejects the call, hangup the incoming channel.
-         *
-         *  @callback outgoingChannelDestroyedCallback
-         *  @memberof originate-example
-         *  @param {Object} event - the full event object
-         *  @param {module:resources~Channel} channel -
-         *    the channel that was destroyed
-         */
-        function (event, channel) {
-
-      incoming.hangup(function (err) {});
-    });
-
-    outgoing.once('StasisStart',
-        /**
-         *  When the outgoing channel enters Stasis, create a mixing bridge
-         *  and join the channels together.
-         *
-         *  @callback outgoingStasisStartCallback
-         *  @memberof originate-example
-         *  @param {Object} event - the full event object
-         *  @param {module:resources~Channel} outgoing -
-         *    the outgoing channel entering Stasis
-         */
-        function (event, outgoing) {
-
-      var bridge = ari.Bridge();
-
-      outgoing.once('StasisEnd',
-          /**
-           *  If the outgoing channel ends, clean up the bridge.
-           *
-           *  @callback outgoingStasisEndCallback
-           *  @memberof originate-example
-           *  @param {Object} event - the full event object
-           *  @param {module:resources~Channel} channel -
-           *    the outgoing channel leaving Stasis
-           */
-          function (event, channel) {
-
-        bridge.destroy(function (err) {});
-      });
-
-      outgoing.answer(
-          /**
-           *  Once the outgoing channel has been answered, create a mixing
-           *  bridge and add the incoming and outgoing channels to it.
-           *
-           *  @callback outgoingAnswerCallback
-           *  @memberof originate-example
-           *  @param {Error} err - error object if any, null otherwise
-           */
-          function (err) {
-
-        bridge.create({type: 'mixing'},
-            /**
-             *  Once the mixing bridge has been created, join the incoming and
-             *  outgoing channels to it.
-             *
-             *  @callback bridgeCreateCallback
-             *  @memberof originate-example
-             *  @param {Error} err - error object if any, null otherwise
-             *  @param {module:resources~Bridge} bridge - the newly created
-             *    mixing bridge
-             */
-            function (err, bridge) {
-
-          bridge.addChannel(
-            {channel: [incoming.id, outgoing.id]},
-            function (err) {}
-          );
-        });
-      });
-    });
-
-    var playback = ari.Playback();
-    incoming.play({media: 'sound:vm-dialout'}, playback, function (err) {});
-
-    // Originate call from incoming channel to endpoint
-    outgoing.originate(
-      {endpoint: ENDPOINT, app: 'originate-example', appArgs: 'dialed'},
-      function (err, channel) {}
-    );
-  }
 
   // can also use ari.start(['app-name'...]) to start multiple applications
   ari.start('originate-example');
