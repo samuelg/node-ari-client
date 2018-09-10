@@ -110,7 +110,7 @@ var channel = ari.Channel();
 channel.on('StasisStart', function (event, channel) {});
 channel.on('ChannelDtmfReceived', function (event, channel) {});
 channel.originate(
-    {endpoint: 'SIP/1000', app: 'application', appArgs: 'dialed'},
+    {endpoint: 'PJSIP/1000', app: 'application', appArgs: 'dialed'},
     function (err, channel) {}
 );
 ```
@@ -121,7 +121,7 @@ Promises:
 var channel = ari.Channel();
 channel.on('StasisStart', function (event, channel) {});
 channel.on('ChannelDtmfReceived', function (event, channel) {});
-channel.originate({endpoint: 'SIP/1000', app: 'application', appArgs: 'dialed'})
+channel.originate({endpoint: 'PJSIP/1000', app: 'application', appArgs: 'dialed'})
   .then(function (channel) {})
   .catch(function (err) {});
 ```
